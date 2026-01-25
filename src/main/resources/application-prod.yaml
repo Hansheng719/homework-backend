@@ -1,0 +1,5 @@
+scheduler:
+  transfer-processor:
+    cron: "0 */5 * * * ?"         # Every 5 minutes
+    delay-seconds: 600            # Process transfers 10+ minutes old (600 seconds)
+    batch-size: 100

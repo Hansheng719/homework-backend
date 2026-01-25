@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(requirement-analyzer)",
+      "Skill(design-documenter)",
+      "Skill(spec-writer)",
+      "Skill(unit-test-implementer)",
+      "Bash(mvn clean:*)",
+      "Bash(./mvnw clean:*)",
+      "Bash(./mvnw test:*)",
+      "Skill(feature-implementer)",
+      "Bash(./mvnw test-compile:*)",
+      "Bash(cat:*)",
+      "Bash(xargs cat:*)",
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(./mvnw spring-boot:run:*)",
+      "Bash(curl:*)",
+      "Bash(docker ps:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(source:*)",
+      "Bash(docker-compose down:*)"
+    ]
+  }
+}

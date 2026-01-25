@@ -1,0 +1,5 @@
+scheduler:
+  transfer-processor:
+    cron: "*/5 * * * * ?"        # Every 5 seconds
+    delay-seconds: 3              # Process transfers 3+ seconds old
+    batch-size: 100

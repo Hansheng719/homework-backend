@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: demo
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/taskdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: taskuser
+    password: taskpass
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+
+# define redis properties here
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000  # 5 minutes in milliseconds
+
+# define rocketmq properties here
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: balance-transfer-producer-group
+    send-message-timeout: 3000
+    retry-times-when-send-failed: 2
+  consumer:
+    consume-thread-min: 10
+    consume-thread-max: 20
+    max-reconsume-times: 16
+
+# scheduled job configuration
+scheduler:
+  transfer-processor:
+    cron: "0 */5 * * * ?"         # Default: every 5 minutes
+    delay-seconds: 600            # Default: 10 minutes (600 seconds)
+    batch-size: 100

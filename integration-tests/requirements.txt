@@ -1,0 +1,32 @@
+# Core Testing Framework
+pytest==8.0.0
+pytest-html==4.1.1              # HTML test reports
+pytest-xdist==3.5.0             # Parallel test execution
+pytest-timeout==2.2.0           # Test timeout support
+pytest-json-report==1.5.0       # JSON reports
+
+# HTTP Client
+requests==2.31.0                # API requests
+urllib3==2.1.0
+
+# Database Client
+PyMySQL==1.1.0                  # MySQL connector
+sqlalchemy==2.0.25              # Optional: ORM for complex queries
+
+# Redis Client
+redis==5.0.1                    # Redis Python client
+
+# Utilities
+python-dotenv==1.0.0            # Environment variable management
+faker==22.0.0                   # Test data generation
+tenacity==8.2.3                 # Retry logic for async operations
+
+# Data Validation
+pydantic==2.5.3                 # Data validation
+jsonschema==4.20.0              # JSON schema validation
+
+# Logging
+colorlog==6.8.0                 # Colored log output
+
+# Test Data
+freezegun==1.4.0                # Time manipulation for testing

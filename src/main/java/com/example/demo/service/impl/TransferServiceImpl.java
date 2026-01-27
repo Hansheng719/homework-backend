@@ -247,4 +247,44 @@ public class TransferServiceImpl implements TransferService {
 
         return transfers;
     }
+
+    @Override
+    public List<Transfer> findDebitProcessingTransfers(LocalDateTime cutoffTime, int batchSize) {
+        log.debug("Finding DEBIT_PROCESSING transfers: cutoffTime={}, batchSize={}", cutoffTime, batchSize);
+
+        return transferRepository.findTransfersByStatusAndUpdatedAtBefore(
+            TransferStatus.DEBIT_PROCESSING,
+            cutoffTime,
+            PageRequest.of(0, batchSize)
+        );
+    }
+
+    @Override
+    public List<Transfer> findCreditProcessingTransfers(LocalDateTime cutoffTime, int batchSize) {
+        log.debug("Finding CREDIT_PROCESSING transfers: cutoffTime={}, batchSize={}", cutoffTime, batchSize);
+
+        return transferRepository.findTransfersByStatusAndUpdatedAtBefore(
+            TransferStatus.CREDIT_PROCESSING,
+            cutoffTime,
+            PageRequest.of(0, batchSize)
+        );
+    }
+
+    @Override
+    @Transactional
+    public void updateTransferTimestamp(Long transferId) {
+        log.debug("Updating transfer timestamp: transferId={}", transferId);
+
+        Optional<Transfer> transferOpt = transferRepository.findByIdForUpdate(transferId);
+
+        if (transferOpt.isEmpty()) {
+            throw new TransferNotFoundException(transferId);
+        }
+
+        Transfer transfer = transferOpt.get();
+        // updatedAt will be automatically set by @PreUpdate hook
+        transferRepository.save(transfer);
+
+        log.debug("Updated transfer timestamp: transferId={}, updatedAt={}", transferId, transfer.getUpdatedAt());
+    }
 }

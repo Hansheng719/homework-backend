@@ -244,13 +244,13 @@ class BalanceServiceTest {
 
         // Then
         assertThat(result).isEqualTo(existingChange);
+        verify(eventPublisher, times(1)).publishEvent(any());
 
         // 驗證不會執行後續操作
         verify(balanceChangeRepository, times(1))
             .findByExternalIdAndType(externalId, BalanceChangeType.TRANSFER_OUT);
         verify(userBalanceRepository, never()).findByIdForUpdate(anyString());
         verify(balanceChangeRepository, times(0)).save(any());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -377,12 +377,12 @@ class BalanceServiceTest {
 
         // Then
         assertThat(result).isEqualTo(existingChange);
+        verify(eventPublisher, times(1)).publishEvent(any());
 
         // 驗證不會執行後續操作
         verify(balanceChangeRepository, times(1))
             .findByExternalIdAndType(externalId, BalanceChangeType.TRANSFER_IN);
         verify(userBalanceRepository, never()).findByIdForUpdate(anyString());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

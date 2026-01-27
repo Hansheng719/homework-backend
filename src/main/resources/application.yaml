@@ -42,6 +42,23 @@ rocketmq:
 # scheduled job configuration
 scheduler:
   transfer-processor:
-    cron: "0 */5 * * * ?"         # Default: every 5 minutes
-    delay-seconds: 600            # Default: 10 minutes (600 seconds)
-    batch-size: 100
+    # PENDING transfers processor
+    pending-cron: "0 */5 * * * ?"         # Default: every 5 minutes
+    pending-delay-seconds: 600            # Default: 10 minutes (600 seconds)
+    pending-batch-size: 100
+    pending-lock-at-most-seconds: 300     # 5 minutes (matches cron frequency)
+    pending-lock-at-least-seconds: 5
+
+    # DEBIT_PROCESSING retry processor
+    debit-processing-cron: "0 */5 * * * ?"          # Default: every 5 minutes
+    debit-processing-delay-seconds: 600             # Default: 10 minutes (600 seconds)
+    debit-processing-batch-size: 100
+    debit-processing-lock-at-most-seconds: 300      # 5 minutes (matches cron frequency)
+    debit-processing-lock-at-least-seconds: 5
+
+    # CREDIT_PROCESSING retry processor
+    credit-processing-cron: "0 */5 * * * ?"         # Default: every 5 minutes
+    credit-processing-delay-seconds: 600            # Default: 10 minutes (600 seconds)
+    credit-processing-batch-size: 100
+    credit-processing-lock-at-most-seconds: 300     # 5 minutes (matches cron frequency)
+    credit-processing-lock-at-least-seconds: 5

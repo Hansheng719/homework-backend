@@ -102,6 +102,7 @@ public class BalanceServiceImpl implements BalanceService {
             .findByExternalIdAndType(externalId, BalanceChangeType.TRANSFER_OUT);
 
         if (existingChange.isPresent()) {
+            eventPublisher.publishEvent(new BalanceOperationCompletedEvent(this, existingChange.get()));
             return existingChange.get(); // 返回 COMPLETED 或 FAILED 記錄
         }
 
@@ -181,6 +182,7 @@ public class BalanceServiceImpl implements BalanceService {
             .findByExternalIdAndType(externalId, BalanceChangeType.TRANSFER_IN);
 
         if (existingChange.isPresent()) {
+            eventPublisher.publishEvent(new BalanceOperationCompletedEvent(this, existingChange.get()));
             return existingChange.get(); // 返回 COMPLETED 或 FAILED 記錄
         }
 

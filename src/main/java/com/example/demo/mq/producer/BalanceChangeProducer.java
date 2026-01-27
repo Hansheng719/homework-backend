@@ -53,7 +53,6 @@ public class BalanceChangeProducer {
                 .type(BalanceChangeType.TRANSFER_OUT)
                 .userId(userId)
                 .amount(amount.negate())  // 負數表示扣款
-                .relatedId(transferId)
                 .timestamp(System.currentTimeMillis())
                 .build();
 
@@ -75,7 +74,6 @@ public class BalanceChangeProducer {
                 .type(BalanceChangeType.TRANSFER_IN)
                 .userId(userId)
                 .amount(amount)  // 正數表示加帳
-                .relatedId(transferId)
                 .timestamp(System.currentTimeMillis())
                 .build();
 

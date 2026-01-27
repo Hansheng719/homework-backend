@@ -84,15 +84,6 @@ public class BalanceChange {
     private BigDecimal amount;
 
     /**
-     * 關聯 ID
-     * - 關聯的業務 ID（例如：轉帳 ID 的字串形式）
-     * - 用途：追蹤和查詢
-     * - 可為 null
-     */
-    @Column(name = "related_id", length = 50)
-    private String relatedId;
-
-    /**
      * 帳變狀態
      * - PROCESSING: 處理中
      * - COMPLETED: 已完成

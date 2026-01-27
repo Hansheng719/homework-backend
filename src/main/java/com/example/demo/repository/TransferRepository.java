@@ -87,4 +87,33 @@ public interface TransferRepository extends JpaRepository<Transfer, Long> {
             @Param("toUserId") String toUserId,
             Pageable pageable
     );
+
+    /**
+     * 查詢指定狀態且 updatedAt 在截止時間之前的轉帳記錄
+     *
+     * 用途：重試排程器查詢停滯在 DEBIT_PROCESSING 或 CREDIT_PROCESSING 狀態的轉帳
+     *
+     * 條件：
+     * 1. 狀態為指定狀態（例如 DEBIT_PROCESSING 或 CREDIT_PROCESSING）
+     * 2. updatedAt <= cutoffTime（例如：NOW() - 10 分鐘）
+     *
+     * 排序：按 updatedAt ASC（最舊的優先重試）
+     *
+     * 使用場景：
+     * - 扣款重試排程器（處理 DEBIT_PROCESSING 超過 10 分鐘）
+     * - 加帳重試排程器（處理 CREDIT_PROCESSING 超過 10 分鐘）
+     *
+     * @param status      轉帳狀態
+     * @param cutoffTime  截止時間（例如：NOW() - 10 分鐘）
+     * @param pageable    分頁參數（例如：PageRequest.of(0, 100)）
+     * @return List<Transfer> 需要重試的轉帳清單
+     */
+    @Query("SELECT t FROM Transfer t WHERE t.status = :status " +
+           "AND t.updatedAt <= :cutoffTime " +
+           "ORDER BY t.updatedAt ASC")
+    List<Transfer> findTransfersByStatusAndUpdatedAtBefore(
+            @Param("status") TransferStatus status,
+            @Param("cutoffTime") LocalDateTime cutoffTime,
+            Pageable pageable
+    );
 }

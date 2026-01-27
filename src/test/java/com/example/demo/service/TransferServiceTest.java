@@ -857,6 +857,150 @@ class TransferServiceTest {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    // ==================== findDebitProcessingTransfers() Tests ====================
+
+    @Test
+    @DisplayName("findDebitProcessingTransfers - With transfers in DEBIT_PROCESSING - Returns transfers older than cutoff")
+    void findDebitProcessingTransfers_WithTransfersInDebitProcessing_ReturnsTransfersOlderThanCutoff() {
+        // Given
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(10);
+        int batchSize = 100;
+
+        Transfer transfer1 = createTransferWithUpdatedAt(1L, TransferStatus.DEBIT_PROCESSING,
+                LocalDateTime.now().minusMinutes(15));
+        Transfer transfer2 = createTransferWithUpdatedAt(2L, TransferStatus.DEBIT_PROCESSING,
+                LocalDateTime.now().minusMinutes(12));
+        List<Transfer> expectedTransfers = List.of(transfer1, transfer2);
+
+        when(transferRepository.findTransfersByStatusAndUpdatedAtBefore(
+                eq(TransferStatus.DEBIT_PROCESSING),
+                eq(cutoffTime),
+                eq(PageRequest.of(0, batchSize))
+        )).thenReturn(expectedTransfers);
+
+        // When
+        List<Transfer> result = transferService.findDebitProcessingTransfers(cutoffTime, batchSize);
+
+        // Then
+        assertThat(result).hasSize(2);
+        assertThat(result).containsExactly(transfer1, transfer2);
+        verify(transferRepository).findTransfersByStatusAndUpdatedAtBefore(
+                eq(TransferStatus.DEBIT_PROCESSING),
+                eq(cutoffTime),
+                eq(PageRequest.of(0, batchSize))
+        );
+    }
+
+    @Test
+    @DisplayName("findDebitProcessingTransfers - With no transfers - Returns empty list")
+    void findDebitProcessingTransfers_WithNoTransfers_ReturnsEmptyList() {
+        // Given
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(10);
+        int batchSize = 100;
+
+        when(transferRepository.findTransfersByStatusAndUpdatedAtBefore(
+                any(), any(), any()
+        )).thenReturn(List.of());
+
+        // When
+        List<Transfer> result = transferService.findDebitProcessingTransfers(cutoffTime, batchSize);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    // ==================== findCreditProcessingTransfers() Tests ====================
+
+    @Test
+    @DisplayName("findCreditProcessingTransfers - With transfers in CREDIT_PROCESSING - Returns transfers older than cutoff")
+    void findCreditProcessingTransfers_WithTransfersInCreditProcessing_ReturnsTransfersOlderThanCutoff() {
+        // Given
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(10);
+        int batchSize = 100;
+
+        Transfer transfer1 = createTransferWithUpdatedAt(1L, TransferStatus.CREDIT_PROCESSING,
+                LocalDateTime.now().minusMinutes(15));
+        Transfer transfer2 = createTransferWithUpdatedAt(2L, TransferStatus.CREDIT_PROCESSING,
+                LocalDateTime.now().minusMinutes(12));
+        List<Transfer> expectedTransfers = List.of(transfer1, transfer2);
+
+        when(transferRepository.findTransfersByStatusAndUpdatedAtBefore(
+                eq(TransferStatus.CREDIT_PROCESSING),
+                eq(cutoffTime),
+                eq(PageRequest.of(0, batchSize))
+        )).thenReturn(expectedTransfers);
+
+        // When
+        List<Transfer> result = transferService.findCreditProcessingTransfers(cutoffTime, batchSize);
+
+        // Then
+        assertThat(result).hasSize(2);
+        assertThat(result).containsExactly(transfer1, transfer2);
+        verify(transferRepository).findTransfersByStatusAndUpdatedAtBefore(
+                eq(TransferStatus.CREDIT_PROCESSING),
+                eq(cutoffTime),
+                eq(PageRequest.of(0, batchSize))
+        );
+    }
+
+    @Test
+    @DisplayName("findCreditProcessingTransfers - With no transfers - Returns empty list")
+    void findCreditProcessingTransfers_WithNoTransfers_ReturnsEmptyList() {
+        // Given
+        LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(10);
+        int batchSize = 100;
+
+        when(transferRepository.findTransfersByStatusAndUpdatedAtBefore(
+                any(), any(), any()
+        )).thenReturn(List.of());
+
+        // When
+        List<Transfer> result = transferService.findCreditProcessingTransfers(cutoffTime, batchSize);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    // ==================== updateTransferTimestamp() Tests ====================
+
+    @Test
+    @DisplayName("updateTransferTimestamp - With existing transfer - Updates timestamp successfully")
+    void updateTransferTimestamp_WithExistingTransfer_UpdatesTimestampSuccessfully() {
+        // Given
+        Long transferId = 1L;
+        Transfer transfer = createTransfer(transferId, TransferStatus.DEBIT_PROCESSING);
+
+        when(transferRepository.findByIdForUpdate(transferId))
+                .thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(Transfer.class)))
+                .thenReturn(transfer);
+
+        // When
+        transferService.updateTransferTimestamp(transferId);
+
+        // Then
+        verify(transferRepository).findByIdForUpdate(transferId);
+        verify(transferRepository).save(transfer);
+        // Note: updatedAt will be set by @PreUpdate hook, not tested here
+    }
+
+    @Test
+    @DisplayName("updateTransferTimestamp - With non-existent transfer - Throws TransferNotFoundException")
+    void updateTransferTimestamp_WithNonExistentTransfer_ThrowsTransferNotFoundException() {
+        // Given
+        Long transferId = 999L;
+
+        when(transferRepository.findByIdForUpdate(transferId))
+                .thenReturn(Optional.empty());
+
+        // When / Then
+        assertThatThrownBy(() -> transferService.updateTransferTimestamp(transferId))
+                .isInstanceOf(TransferNotFoundException.class);
+
+        verify(transferRepository).findByIdForUpdate(transferId);
+        verify(transferRepository, never()).save(any());
+    }
+
     // ==================== Helper Methods ====================
 
     /**
@@ -879,6 +1023,15 @@ class TransferServiceTest {
     private Transfer createTransferWithTimestamp(Long id, TransferStatus status, LocalDateTime createdAt) {
         Transfer transfer = createTransfer(id, status);
         transfer.setCreatedAt(createdAt);
+        return transfer;
+    }
+
+    /**
+     * 建立帶有特定 updatedAt 的 Transfer 物件
+     */
+    private Transfer createTransferWithUpdatedAt(Long id, TransferStatus status, LocalDateTime updatedAt) {
+        Transfer transfer = createTransfer(id, status);
+        transfer.setUpdatedAt(updatedAt);
         return transfer;
     }
 }

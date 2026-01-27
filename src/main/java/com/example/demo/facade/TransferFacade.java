@@ -156,4 +156,74 @@ public interface TransferFacade {
      * @throws RuntimeException 查詢或處理失敗
      */
     int processPendingTransfers(int delaySeconds, int batchSize);
+
+    /**
+     * 處理停滯在 DEBIT_PROCESSING 狀態的轉帳（重試排程器）
+     *
+     * 此方法作為扣款重試排程器的單一入口點。
+     * 查詢停滯在 DEBIT_PROCESSING 狀態超過指定時間的轉帳，重新發送扣款事件。
+     *
+     * 職責：
+     * 1. 計算截止時間（當前時間 - delaySeconds）
+     * 2. 查詢 DEBIT_PROCESSING 狀態且 updatedAt 早於截止時間的轉帳
+     * 3. 逐一處理每筆轉帳：
+     *    - 重新發送扣款 MQ 事件（BalanceChangeProducer.sendDebitRequest）
+     *    - 更新 updatedAt 時間戳（避免立即重試）
+     * 4. 錯誤處理：單筆轉帳失敗不影響其他轉帳處理
+     * 5. 記錄處理日誌與統計資訊
+     *
+     * 處理流程：
+     * - 狀態保持：DEBIT_PROCESSING（不變）
+     * - 重新發送 MQ：直接呼叫 BalanceChangeProducer.sendDebitRequest()
+     * - 更新時間戳：呼叫 TransferService.updateTransferTimestamp()
+     *
+     * 設計原則：
+     * - 利用 BalanceService 冪等性：(external_id, type) 唯一約束確保不重複處理
+     * - At-Least-Once 語義：確保因網路或 MQ 故障導致的消息丟失能被恢復
+     *
+     * 錯誤處理策略：
+     * - 單筆轉帳失敗：記錄錯誤日誌，繼續處理下一筆
+     * - 整體查詢失敗：拋出 RuntimeException
+     *
+     * @param delaySeconds 延遲秒數，只處理 updatedAt 早於（當前時間 - delaySeconds）的轉帳
+     * @param batchSize 批次大小，單次處理的最大轉帳數量
+     * @return 成功重試的轉帳數量
+     * @throws RuntimeException 查詢或處理失敗
+     */
+    int processDebitProcessingTransfers(int delaySeconds, int batchSize);
+
+    /**
+     * 處理停滯在 CREDIT_PROCESSING 狀態的轉帳（重試排程器）
+     *
+     * 此方法作為加帳重試排程器的單一入口點。
+     * 查詢停滯在 CREDIT_PROCESSING 狀態超過指定時間的轉帳，重新發送加帳事件。
+     *
+     * 職責：
+     * 1. 計算截止時間（當前時間 - delaySeconds）
+     * 2. 查詢 CREDIT_PROCESSING 狀態且 updatedAt 早於截止時間的轉帳
+     * 3. 逐一處理每筆轉帳：
+     *    - 重新發送加帳 MQ 事件（BalanceChangeProducer.sendCreditRequest）
+     *    - 更新 updatedAt 時間戳（避免立即重試）
+     * 4. 錯誤處理：單筆轉帳失敗不影響其他轉帳處理
+     * 5. 記錄處理日誌與統計資訊
+     *
+     * 處理流程：
+     * - 狀態保持：CREDIT_PROCESSING（不變）
+     * - 重新發送 MQ：直接呼叫 BalanceChangeProducer.sendCreditRequest()
+     * - 更新時間戳：呼叫 TransferService.updateTransferTimestamp()
+     *
+     * 設計原則：
+     * - 利用 BalanceService 冪等性：(external_id, type) 唯一約束確保不重複處理
+     * - At-Least-Once 語義：確保因網路或 MQ 故障導致的消息丟失能被恢復
+     *
+     * 錯誤處理策略：
+     * - 單筆轉帳失敗：記錄錯誤日誌，繼續處理下一筆
+     * - 整體查詢失敗：拋出 RuntimeException
+     *
+     * @param delaySeconds 延遲秒數，只處理 updatedAt 早於（當前時間 - delaySeconds）的轉帳
+     * @param batchSize 批次大小，單次處理的最大轉帳數量
+     * @return 成功重試的轉帳數量
+     * @throws RuntimeException 查詢或處理失敗
+     */
+    int processCreditProcessingTransfers(int delaySeconds, int batchSize);
 }

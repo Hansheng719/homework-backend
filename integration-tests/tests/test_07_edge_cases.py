@@ -360,3 +360,215 @@ def test_IT028_special_characters_in_userId(
     db_cursor.execute("SELECT COUNT(*) as count FROM user_balances")
     result = db_cursor.fetchone()
     assert result["count"] < 100  # Shouldn't have exploded
+
+
+@pytest.mark.edge_cases
+def test_IT029_debit_processing_retry_scheduler_recovery(
+    api: APIClient,
+    db_cursor,
+    unique_user_id
+):
+    """
+    IT-029: DEBIT_PROCESSING retry scheduler recovery.
+
+    Verifies:
+    - Transfer stuck in DEBIT_PROCESSING for >10 minutes gets retried
+    - Retry scheduler re-sends debit MQ event
+    - BalanceService idempotency: finds existing balance_change, skips and returns result
+    - Transfer completes successfully without duplicate balance changes
+    - Balances remain correct (not double-debited/credited)
+    - updated_at timestamp refreshed by retry scheduler
+    """
+    user_at = f"{unique_user_id}_AT"
+    user_au = f"{unique_user_id}_AU"
+
+    # Setup: Create users
+    api.create_user(user_at, 1000.00)
+    api.create_user(user_au, 500.00)
+
+    # Create transfer
+    response = api.create_transfer(user_at, user_au, 300.00)
+    assert response.status_code == 201
+    transfer_id = response.json()["id"]
+
+    # Wait for transfer to complete normally (state transitions are very fast)
+    from helpers.wait_utils import wait_for_transfer_completion
+    wait_for_transfer_completion(db_cursor, transfer_id, "COMPLETED", timeout=10)
+
+    # Verify initial state: balances=(700.00, 800.00), 2 balance_changes exist
+    response = api.get_balance(user_at)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 700.00)
+
+    response = api.get_balance(user_au)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 800.00)
+
+    db_cursor.execute(
+        "SELECT COUNT(*) as count FROM balance_changes WHERE external_id = %s",
+        (transfer_id,)
+    )
+    result = db_cursor.fetchone()
+    initial_balance_changes_count = result["count"]
+    assert initial_balance_changes_count == 2
+
+    # Simulate stuck in DEBIT_PROCESSING (balance operations already succeeded, but status didn't update)
+    # Only reset transfer status and backdate updated_at
+    db_cursor.execute(
+        """UPDATE transfers
+           SET status = 'DEBIT_PROCESSING',
+               updated_at = DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+           WHERE id = %s""",
+        (transfer_id,)
+    )
+
+    # Wait a moment for database write to complete
+    import time
+    time.sleep(1)
+
+    # Verify the status was actually updated
+    db_cursor.execute("SELECT id, status, updated_at FROM transfers WHERE id = %s", (transfer_id,))
+    check_transfer = db_cursor.fetchone()
+    assert check_transfer["status"] == "DEBIT_PROCESSING", f"Status should be DEBIT_PROCESSING but was {check_transfer['status']}"
+
+    # Wait for retry scheduler to run and complete the transfer
+    # Scheduler re-sends debit MQ → BalanceService finds existing balance_change → skips → proceeds to credit → completes
+    wait_for_transfer_completion(db_cursor, transfer_id, "COMPLETED", timeout=30)
+
+    # Verify transfer completed successfully
+    db_cursor.execute(
+        "SELECT status, updated_at FROM transfers WHERE id = %s",
+        (transfer_id,)
+    )
+    transfer = db_cursor.fetchone()
+    assert transfer["status"] == "COMPLETED"
+
+    # Verify updated_at was refreshed by retry scheduler (should be recent)
+    from datetime import datetime
+    updated_at = transfer["updated_at"]
+    now = datetime.now()
+    time_diff = now - updated_at.replace(tzinfo=None)
+    assert time_diff.total_seconds() < 30, "updated_at should be recent (updated by retry scheduler)"
+
+    # Verify balances UNCHANGED (still 700.00 and 800.00 - not double-debited/credited)
+    response = api.get_balance(user_at)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 700.00)
+
+    response = api.get_balance(user_au)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 800.00)
+
+    # Verify STILL only 2 balance_changes - BalanceService idempotency prevented duplicates
+    db_cursor.execute(
+        "SELECT COUNT(*) as count FROM balance_changes WHERE external_id = %s",
+        (transfer_id,)
+    )
+    result = db_cursor.fetchone()
+    assert result["count"] == 2, "Should still have exactly 2 balance_changes (idempotency working)"
+
+
+@pytest.mark.edge_cases
+def test_IT030_credit_processing_retry_scheduler_recovery(
+    api: APIClient,
+    db_cursor,
+    unique_user_id
+):
+    """
+    IT-030: CREDIT_PROCESSING retry scheduler recovery.
+
+    Verifies:
+    - Transfer stuck in CREDIT_PROCESSING for >10 minutes gets retried
+    - Retry scheduler re-sends credit MQ event
+    - BalanceService idempotency: finds existing balance_change, skips and returns result
+    - Transfer completes successfully without duplicate balance changes
+    - Balances remain correct (not double-credited)
+    - updated_at timestamp refreshed by retry scheduler
+    """
+    user_av = f"{unique_user_id}_AV"
+    user_aw = f"{unique_user_id}_AW"
+
+    # Setup: Create users
+    api.create_user(user_av, 1000.00)
+    api.create_user(user_aw, 500.00)
+
+    # Create transfer
+    response = api.create_transfer(user_av, user_aw, 400.00)
+    assert response.status_code == 201
+    transfer_id = response.json()["id"]
+
+    # Wait for transfer to complete normally (state transitions are very fast)
+    from helpers.wait_utils import wait_for_transfer_completion
+    wait_for_transfer_completion(db_cursor, transfer_id, "COMPLETED", timeout=10)
+
+    # Verify initial state: balances=(600.00, 900.00), 2 balance_changes exist
+    response = api.get_balance(user_av)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 600.00)
+
+    response = api.get_balance(user_aw)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 900.00)
+
+    db_cursor.execute(
+        "SELECT COUNT(*) as count FROM balance_changes WHERE external_id = %s",
+        (transfer_id,)
+    )
+    result = db_cursor.fetchone()
+    initial_balance_changes_count = result["count"]
+    assert initial_balance_changes_count == 2
+
+    # Simulate stuck in CREDIT_PROCESSING (balance operations already succeeded, but status didn't update)
+    # Only reset transfer status and backdate updated_at
+    db_cursor.execute(
+        """UPDATE transfers
+           SET status = 'CREDIT_PROCESSING',
+               updated_at = DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+           WHERE id = %s""",
+        (transfer_id,)
+    )
+
+    # Wait a moment for database write to complete
+    import time
+    time.sleep(1)
+
+    # Verify the status was actually updated
+    db_cursor.execute("SELECT id, status, updated_at FROM transfers WHERE id = %s", (transfer_id,))
+    check_transfer = db_cursor.fetchone()
+    assert check_transfer["status"] == "CREDIT_PROCESSING", f"Status should be CREDIT_PROCESSING but was {check_transfer['status']}"
+
+    # Wait for retry scheduler to run and complete the transfer
+    # Scheduler re-sends credit MQ → BalanceService finds existing balance_change → skips → completes
+    wait_for_transfer_completion(db_cursor, transfer_id, "COMPLETED", timeout=30)
+
+    # Verify transfer completed successfully
+    db_cursor.execute(
+        "SELECT status, updated_at FROM transfers WHERE id = %s",
+        (transfer_id,)
+    )
+    transfer = db_cursor.fetchone()
+    assert transfer["status"] == "COMPLETED"
+
+    # Verify updated_at was refreshed by retry scheduler (should be recent)
+    from datetime import datetime
+    updated_at = transfer["updated_at"]
+    now = datetime.now()
+    time_diff = now - updated_at.replace(tzinfo=None)
+    assert time_diff.total_seconds() < 30, "updated_at should be recent (updated by retry scheduler)"
+
+    # Verify balances UNCHANGED (still 600.00 and 900.00 - not double-credited)
+    response = api.get_balance(user_av)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 600.00)
+
+    response = api.get_balance(user_aw)
+    assert response.status_code == 200
+    assert_balance(response.json()["balance"], 900.00)
+
+    # Verify STILL only 2 balance_changes - BalanceService idempotency prevented duplicates
+    db_cursor.execute(
+        "SELECT COUNT(*) as count FROM balance_changes WHERE external_id = %s",
+        (transfer_id,)
+    )
+    result = db_cursor.fetchone()
+    assert result["count"] == 2, "Should still have exactly 2 balance_changes (idempotency working)"

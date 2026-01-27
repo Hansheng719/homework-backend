@@ -3,6 +3,7 @@ package com.example.demo.repository;
 import com.example.demo.ConfigureMockConsumerBeanApplication;
 import com.example.demo.entity.Transfer;
 import com.example.demo.entity.TransferStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,7 @@ import static org.assertj.core.api.Assertions.*;
  * - 分頁查詢 (findByFromUserIdOrToUserId)
  * - 資料持久化驗證
  */
+@Slf4j
 @SpringBootTest(classes = ConfigureMockConsumerBeanApplication.class)
 @Testcontainers
 @Transactional
@@ -101,7 +103,7 @@ class TransferRepositoryTest {
                 .isPresent()
                 .get()
                 .usingRecursiveComparison()
-                .ignoringFields("id", "createdAt") // 忽略自動生成的欄位
+                .ignoringFields("id", "createdAt", "updatedAt") // 忽略自動生成的欄位
                 .isEqualTo(Transfer.builder()
                         .fromUserId("user_003")
                         .toUserId("user_004")
@@ -140,7 +142,7 @@ class TransferRepositoryTest {
         // 不應該被查詢到：PENDING 但只有 5 分鐘前（未超過 10 分鐘）
         Transfer recentPending = createTransferWithTime("user_005", "user_006",
                 new BigDecimal("300.00"), TransferStatus.PENDING, fiveMinutesAgo);
-        transferRepository.save(recentPending);
+        Transfer saved = transferRepository.save(recentPending);
 
         // 不應該被查詢到：已經是 DEBIT_PROCESSING 狀態
         Transfer processingTransfer = createTransferWithTime("user_007", "user_008",
@@ -177,7 +179,7 @@ class TransferRepositoryTest {
     @DisplayName("findPendingTransfers - With limit - Returns limited results ordered by createdAt")
     void findPendingTransfers_WithLimit_ReturnsLimitedResults() {
         // Given - 建立 5 筆 PENDING 轉帳
-        LocalDateTime elevenMinutesAgo = LocalDateTime.now().minusMinutes(11);
+        LocalDateTime elevenMinutesAgo = LocalDateTime.now().minusMinutes(15);
 
         for (int i = 1; i <= 5; i++) {
             Transfer transfer = createTransferWithTime(
@@ -188,10 +190,14 @@ class TransferRepositoryTest {
                     elevenMinutesAgo.minusMinutes(i) // 不同時間點
             );
             transferRepository.save(transfer);
+            transferRepository.flush();
+            log.info("{}", transfer.getId());
         }
 
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(10);
         Pageable pageable = PageRequest.of(0, 3); // 只取 3 筆
+
+        List<Transfer> all = transferRepository.findAll();
 
         // When
         List<Transfer> pendingTransfers = transferRepository.findPendingTransfers(

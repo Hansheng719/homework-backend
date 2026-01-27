@@ -120,7 +120,7 @@ class TransferControllerTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.error").value("Validation Failed"))
-            .andExpect(jsonPath("$.message").value(containsString("Amount must be > 0")));
+            .andExpect(jsonPath("$.message").value(containsString("amount: Amount must be greater than 0")));
 
         verify(transferFacade, never()).createTransfer(any(CreateTransferRequest.class));
     }
@@ -138,7 +138,7 @@ class TransferControllerTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.error").value("Validation Failed"))
-            .andExpect(jsonPath("$.message").value(containsString("Amount must be > 0")));
+            .andExpect(jsonPath("$.message").value(containsString("amount: Amount must be greater than 0")));
 
         verify(transferFacade, never()).createTransfer(any(CreateTransferRequest.class));
     }

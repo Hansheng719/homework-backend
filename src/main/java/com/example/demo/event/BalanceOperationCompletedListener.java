@@ -39,7 +39,8 @@ public class BalanceOperationCompletedListener {
     private final BalanceService balanceService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleBalanceOperationCompleted(BalanceOperationCompletedEvent event) {
+    public void handleBalanceOperationCommit(BalanceOperationCompletedEvent event) {
+        log.info("handleBalanceOperationCommit: {}", event.getBalanceChange().getId());
         // 1. 快取失效（僅成功的操作）
         try {
             if (event.isSuccess()) {
@@ -66,13 +67,11 @@ public class BalanceOperationCompletedListener {
                 event.getBalanceChange().getType(),
                 event.isSuccess());
         } catch (Exception e) {
-            // MQ 發送失敗是基礎設施問題
-            // 事務已提交，無法回滾
-            // 記錄錯誤供監控和告警使用
             log.error("Failed to send balance change result to MQ: externalId={}, type={}, success={}",
                 event.getBalanceChange().getExternalId(),
                 event.getBalanceChange().getType(),
                 event.isSuccess(), e);
         }
     }
+
 }

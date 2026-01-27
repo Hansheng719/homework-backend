@@ -208,9 +208,9 @@ open target/surefire-reports/index.html
 
 ## 🔗 相關資源
 
-- [README.md](../../README.md) - 專案總覽與需求說明
+- [README.md](../../../README.md) - 專案總覽與需求說明
 - [Controller 單元測試](../../src/test/java/com/example/demo/controller/) - 現有單元測試
-- [API 規格](../../README.md#api-endpoints) - API 端點規格
+- [API 規格](../../../README.md#api-endpoints) - API 端點規格
 
 
 ---

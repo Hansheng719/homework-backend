@@ -35,6 +35,7 @@ public class TransferFacadeImpl implements TransferFacade {
 
     private final TransferService transferService;
     private final BalanceService balanceService;
+    private final com.example.demo.mq.producer.BalanceChangeProducer balanceChangeProducer;
 
     @Override
     public void handleBalanceChangeResult(BalanceChangeResultMsg msg) {
@@ -297,6 +298,104 @@ public class TransferFacadeImpl implements TransferFacade {
         } catch (Exception e) {
             log.error("Failed to process pending transfers: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to process pending transfers", e);
+        }
+    }
+
+    @Override
+    public int processDebitProcessingTransfers(int delaySeconds, int batchSize) {
+        log.info("Processing DEBIT_PROCESSING transfers for retry: delaySeconds={}, batchSize={}",
+                delaySeconds, batchSize);
+
+        LocalDateTime cutoffTime = LocalDateTime.now().minusSeconds(delaySeconds);
+
+        try {
+            List<Transfer> debitProcessingTransfers = transferService.findDebitProcessingTransfers(
+                    cutoffTime,
+                    batchSize
+            );
+
+            int processedCount = 0;
+            int totalFound = debitProcessingTransfers.size();
+
+            log.info("Found {} DEBIT_PROCESSING transfers to retry", totalFound);
+
+            for (Transfer transfer : debitProcessingTransfers) {
+                try {
+                    // Re-send debit request to MQ (idempotent operation)
+                    balanceChangeProducer.sendDebitRequest(
+                            transfer.getId(),
+                            transfer.getFromUserId(),
+                            transfer.getAmount()
+                    );
+
+                    // Update timestamp to avoid immediate retry
+                    transferService.updateTransferTimestamp(transfer.getId());
+
+                    processedCount++;
+
+                    log.debug("Retried debit request for transfer {}", transfer.getId());
+                } catch (Exception e) {
+                    log.error("Failed to retry debit request for transfer {}: {}",
+                            transfer.getId(), e.getMessage(), e);
+                    // Continue processing other transfers
+                }
+            }
+
+            log.info("Retried {} of {} DEBIT_PROCESSING transfers", processedCount, totalFound);
+            return processedCount;
+
+        } catch (Exception e) {
+            log.error("Failed to process DEBIT_PROCESSING transfers: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to process DEBIT_PROCESSING transfers", e);
+        }
+    }
+
+    @Override
+    public int processCreditProcessingTransfers(int delaySeconds, int batchSize) {
+        log.info("Processing CREDIT_PROCESSING transfers for retry: delaySeconds={}, batchSize={}",
+                delaySeconds, batchSize);
+
+        LocalDateTime cutoffTime = LocalDateTime.now().minusSeconds(delaySeconds);
+
+        try {
+            List<Transfer> creditProcessingTransfers = transferService.findCreditProcessingTransfers(
+                    cutoffTime,
+                    batchSize
+            );
+
+            int processedCount = 0;
+            int totalFound = creditProcessingTransfers.size();
+
+            log.info("Found {} CREDIT_PROCESSING transfers to retry", totalFound);
+
+            for (Transfer transfer : creditProcessingTransfers) {
+                try {
+                    // Re-send credit request to MQ (idempotent operation)
+                    balanceChangeProducer.sendCreditRequest(
+                            transfer.getId(),
+                            transfer.getToUserId(),
+                            transfer.getAmount()
+                    );
+
+                    // Update timestamp to avoid immediate retry
+                    transferService.updateTransferTimestamp(transfer.getId());
+
+                    processedCount++;
+
+                    log.debug("Retried credit request for transfer {}", transfer.getId());
+                } catch (Exception e) {
+                    log.error("Failed to retry credit request for transfer {}: {}",
+                            transfer.getId(), e.getMessage(), e);
+                    // Continue processing other transfers
+                }
+            }
+
+            log.info("Retried {} of {} CREDIT_PROCESSING transfers", processedCount, totalFound);
+            return processedCount;
+
+        } catch (Exception e) {
+            log.error("Failed to process CREDIT_PROCESSING transfers: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to process CREDIT_PROCESSING transfers", e);
         }
     }
 }

@@ -1,5 +1,16 @@
 scheduler:
   transfer-processor:
-    cron: "0 */5 * * * ?"         # Every 5 minutes
-    delay-seconds: 600            # Process transfers 10+ minutes old (600 seconds)
-    batch-size: 100
+    # PENDING transfers processor
+    pending-cron: "0 */5 * * * ?"         # Every 5 minutes
+    pending-delay-seconds: 600            # Process transfers 10+ minutes old (600 seconds)
+    pending-batch-size: 100
+
+    # DEBIT_PROCESSING retry processor
+    debit-processing-cron: "0 */5 * * * ?"          # Every 5 minutes
+    debit-processing-delay-seconds: 600             # Retry transfers 10+ minutes old
+    debit-processing-batch-size: 100
+
+    # CREDIT_PROCESSING retry processor
+    credit-processing-cron: "0 */5 * * * ?"         # Every 5 minutes
+    credit-processing-delay-seconds: 600            # Retry transfers 10+ minutes old
+    credit-processing-batch-size: 100

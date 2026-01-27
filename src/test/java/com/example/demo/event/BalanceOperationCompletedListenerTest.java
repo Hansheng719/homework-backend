@@ -53,7 +53,7 @@ class BalanceOperationCompletedListenerTest {
         BalanceOperationCompletedEvent event = new BalanceOperationCompletedEvent(this, balanceChange);
 
         // When
-        listener.handleBalanceOperationCompleted(event);
+        listener.handleBalanceOperationCommit(event);
 
         // Then
         // 驗證快取被清除（因為是成功的操作）
@@ -75,7 +75,7 @@ class BalanceOperationCompletedListenerTest {
         BalanceOperationCompletedEvent event = new BalanceOperationCompletedEvent(this, balanceChange);
 
         // When
-        listener.handleBalanceOperationCompleted(event);
+        listener.handleBalanceOperationCommit(event);
 
         // Then
         // 驗證執行順序：快取清除應該在 MQ 發送之前
@@ -92,7 +92,7 @@ class BalanceOperationCompletedListenerTest {
         BalanceOperationCompletedEvent event = new BalanceOperationCompletedEvent(this, balanceChange);
 
         // When
-        listener.handleBalanceOperationCompleted(event);
+        listener.handleBalanceOperationCommit(event);
 
         // Then
         // 驗證快取未被清除（因為操作失敗，餘額未變更）
@@ -108,7 +108,7 @@ class BalanceOperationCompletedListenerTest {
 
     @Test
     @DisplayName("handleBalanceOperationCompleted - When cache eviction fails - Still sends MQ notification")
-    void handleBalanceOperationCompleted_WhenCacheEvictionFails_StillSendsMQ() {
+    void handleBalanceOperationCommit_WhenCacheEvictionFails_StillSendsMQ() {
         // Given
         BalanceChange balanceChange = createSuccessfulBalanceChange();
         BalanceOperationCompletedEvent event = new BalanceOperationCompletedEvent(this, balanceChange);
@@ -118,7 +118,7 @@ class BalanceOperationCompletedListenerTest {
             .when(balanceService).evictBalanceCache(anyString());
 
         // When
-        listener.handleBalanceOperationCompleted(event);
+        listener.handleBalanceOperationCommit(event);
 
         // Then
         // 驗證快取清除被嘗試
@@ -134,7 +134,7 @@ class BalanceOperationCompletedListenerTest {
 
     @Test
     @DisplayName("handleBalanceOperationCompleted - When MQ send fails - Cache was already evicted")
-    void handleBalanceOperationCompleted_WhenMQSendFails_CacheAlreadyEvicted() {
+    void handleBalanceOperationCommit_WhenMQSendFails_CacheAlreadyEvicted() {
         // Given
         BalanceChange balanceChange = createSuccessfulBalanceChange();
         BalanceOperationCompletedEvent event = new BalanceOperationCompletedEvent(this, balanceChange);
@@ -144,7 +144,7 @@ class BalanceOperationCompletedListenerTest {
             .when(producer).sendResult(any(), anyBoolean(), any());
 
         // When & Then - 不應拋出異常（錯誤被捕獲並記錄）
-        assertThatCode(() -> listener.handleBalanceOperationCompleted(event))
+        assertThatCode(() -> listener.handleBalanceOperationCommit(event))
             .doesNotThrowAnyException();
 
         // 驗證快取在 MQ 發送失敗前已被清除
@@ -156,7 +156,7 @@ class BalanceOperationCompletedListenerTest {
 
     @Test
     @DisplayName("handleBalanceOperationCompleted - With correct userId from event - Evicts cache for correct user")
-    void handleBalanceOperationCompleted_WithCorrectUserId_EvictsCacheForCorrectUser() {
+    void handleBalanceOperationCommit_WithCorrectUserId_EvictsCacheForCorrectUser() {
         // Given
         String userId = "specific_user_123";
         BalanceChange balanceChange = BalanceChange.builder()
@@ -175,7 +175,7 @@ class BalanceOperationCompletedListenerTest {
         BalanceOperationCompletedEvent event = new BalanceOperationCompletedEvent(this, balanceChange);
 
         // When
-        listener.handleBalanceOperationCompleted(event);
+        listener.handleBalanceOperationCommit(event);
 
         // Then
         // 驗證使用正確的 userId 清除快取
@@ -185,7 +185,7 @@ class BalanceOperationCompletedListenerTest {
 
     @Test
     @DisplayName("handleBalanceOperationCompleted - With multiple events - Each handled independently")
-    void handleBalanceOperationCompleted_WithMultipleEvents_EachHandledIndependently() {
+    void handleBalanceOperationCommit_WithMultipleEvents_EachHandledIndependently() {
         // Given
         BalanceChange successChange = createSuccessfulBalanceChange();
         BalanceChange failedChange = createFailedBalanceChange();
@@ -194,8 +194,8 @@ class BalanceOperationCompletedListenerTest {
         BalanceOperationCompletedEvent failedEvent = new BalanceOperationCompletedEvent(this, failedChange);
 
         // When
-        listener.handleBalanceOperationCompleted(successEvent);
-        listener.handleBalanceOperationCompleted(failedEvent);
+        listener.handleBalanceOperationCommit(successEvent);
+        listener.handleBalanceOperationCommit(failedEvent);
 
         // Then
         // 成功事件：快取被清除，MQ 被發送

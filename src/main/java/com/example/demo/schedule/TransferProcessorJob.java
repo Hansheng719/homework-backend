@@ -4,6 +4,7 @@ import com.example.demo.config.SchedulerProperties;
 import com.example.demo.facade.TransferFacade;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -37,21 +38,88 @@ public class TransferProcessorJob {
     /**
      * 定時處理待處理的轉帳
      *
-     * 觸發時機：根據 scheduler.transfer-processor.cron 配置
+     * 觸發時機：根據 scheduler.transfer-processor.pending-cron 配置
      */
-    @Scheduled(cron = "${scheduler.transfer-processor.cron}")
+    @Scheduled(cron = "${scheduler.transfer-processor.pending-cron}")
+    @SchedulerLock(
+        name = "processPendingTransfers",
+        lockAtMostFor = "${scheduler.transfer-processor.pending-lock-at-most-seconds}s",
+        lockAtLeastFor = "${scheduler.transfer-processor.pending-lock-at-least-seconds}s"
+    )
     public void processPendingTransfers() {
-        log.info("Starting scheduled job to process PENDING transfers");
+        log.info("Starting scheduled job to process PENDING transfers (lock acquired)");
 
         try {
             int processedCount = transferFacade.processPendingTransfers(
-                    schedulerProperties.getDelaySeconds(),
-                    schedulerProperties.getBatchSize()
+                    schedulerProperties.getPendingDelaySeconds(),
+                    schedulerProperties.getPendingBatchSize()
             );
 
-            log.info("Scheduled job completed: processed {} transfers", processedCount);
+            log.info("Scheduled job completed: processed {} PENDING transfers", processedCount);
         } catch (Exception e) {
-            log.error("Scheduled job failed: {}", e.getMessage(), e);
+            log.error("PENDING transfers scheduled job failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 定時重試停滯在 DEBIT_PROCESSING 的轉帳
+     *
+     * 觸發時機：根據 scheduler.transfer-processor.debit-processing-cron 配置
+     *
+     * 職責：
+     * - 查詢 DEBIT_PROCESSING 狀態超過指定時間的轉帳
+     * - 重新發送扣款 MQ 事件
+     * - 利用 BalanceService 冪等性確保不重複處理
+     */
+    @Scheduled(cron = "${scheduler.transfer-processor.debit-processing-cron}")
+    @SchedulerLock(
+        name = "processDebitProcessingTransfers",
+        lockAtMostFor = "${scheduler.transfer-processor.debit-processing-lock-at-most-seconds}s",
+        lockAtLeastFor = "${scheduler.transfer-processor.debit-processing-lock-at-least-seconds}s"
+    )
+    public void processDebitProcessingTransfers() {
+        log.info("Starting scheduled job to retry DEBIT_PROCESSING transfers (lock acquired)");
+
+        try {
+            int processedCount = transferFacade.processDebitProcessingTransfers(
+                    schedulerProperties.getDebitProcessingDelaySeconds(),
+                    schedulerProperties.getDebitProcessingBatchSize()
+            );
+
+            log.info("Scheduled job completed: retried {} DEBIT_PROCESSING transfers", processedCount);
+        } catch (Exception e) {
+            log.error("DEBIT_PROCESSING retry scheduled job failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 定時重試停滯在 CREDIT_PROCESSING 的轉帳
+     *
+     * 觸發時機：根據 scheduler.transfer-processor.credit-processing-cron 配置
+     *
+     * 職責：
+     * - 查詢 CREDIT_PROCESSING 狀態超過指定時間的轉帳
+     * - 重新發送加帳 MQ 事件
+     * - 利用 BalanceService 冪等性確保不重複處理
+     */
+    @Scheduled(cron = "${scheduler.transfer-processor.credit-processing-cron}")
+    @SchedulerLock(
+        name = "processCreditProcessingTransfers",
+        lockAtMostFor = "${scheduler.transfer-processor.credit-processing-lock-at-most-seconds}s",
+        lockAtLeastFor = "${scheduler.transfer-processor.credit-processing-lock-at-least-seconds}s"
+    )
+    public void processCreditProcessingTransfers() {
+        log.info("Starting scheduled job to retry CREDIT_PROCESSING transfers (lock acquired)");
+
+        try {
+            int processedCount = transferFacade.processCreditProcessingTransfers(
+                    schedulerProperties.getCreditProcessingDelaySeconds(),
+                    schedulerProperties.getCreditProcessingBatchSize()
+            );
+
+            log.info("Scheduled job completed: retried {} CREDIT_PROCESSING transfers", processedCount);
+        } catch (Exception e) {
+            log.error("CREDIT_PROCESSING retry scheduled job failed: {}", e.getMessage(), e);
         }
     }
 }

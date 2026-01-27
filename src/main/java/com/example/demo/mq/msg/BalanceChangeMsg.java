@@ -51,12 +51,6 @@ public class BalanceChangeMsg implements Serializable {
     private BigDecimal amount;
 
     /**
-     * 關聯的轉帳 ID
-     * 用於追蹤和審計
-     */
-    private Long relatedId;
-
-    /**
      * 時間戳（Unix epoch milliseconds）
      */
     private long timestamp;

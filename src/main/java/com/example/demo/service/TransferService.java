@@ -163,4 +163,53 @@ public interface TransferService {
      * @return Page<Transfer> 分頁結果
      */
     Page<Transfer> getTransferHistory(String userId, int page, int size);
+
+    /**
+     * 查詢停滯在 DEBIT_PROCESSING 狀態的轉帳
+     *
+     * 用於扣款重試排程器：查詢 DEBIT_PROCESSING 狀態且 updatedAt 在截止時間之前的轉帳
+     *
+     * 執行步驟：
+     * 1. 查詢 status = DEBIT_PROCESSING AND updatedAt <= cutoffTime
+     * 2. 按 updatedAt ASC 排序（最舊的優先）
+     * 3. 限制結果數量為 batchSize
+     *
+     * @param cutoffTime 截止時間（通常是 NOW() - 10 分鐘）
+     * @param batchSize 批次大小（建議 100）
+     * @return List<Transfer> 需要重試的轉帳清單
+     */
+    List<Transfer> findDebitProcessingTransfers(LocalDateTime cutoffTime, int batchSize);
+
+    /**
+     * 查詢停滯在 CREDIT_PROCESSING 狀態的轉帳
+     *
+     * 用於加帳重試排程器：查詢 CREDIT_PROCESSING 狀態且 updatedAt 在截止時間之前的轉帳
+     *
+     * 執行步驟：
+     * 1. 查詢 status = CREDIT_PROCESSING AND updatedAt <= cutoffTime
+     * 2. 按 updatedAt ASC 排序（最舊的優先）
+     * 3. 限制結果數量為 batchSize
+     *
+     * @param cutoffTime 截止時間（通常是 NOW() - 10 分鐘）
+     * @param batchSize 批次大小（建議 100）
+     * @return List<Transfer> 需要重試的轉帳清單
+     */
+    List<Transfer> findCreditProcessingTransfers(LocalDateTime cutoffTime, int batchSize);
+
+    /**
+     * 更新轉帳的 updatedAt 時間戳
+     *
+     * 用於重試排程器：在重新發送 MQ 事件後更新時間戳，避免立即再次重試
+     *
+     * 執行步驟：
+     * 1. 使用悲觀鎖查詢 Transfer (FOR UPDATE)
+     * 2. 設定 updatedAt = 當前時間
+     * 3. 儲存
+     *
+     * 注意：此方法不會觸發 TransferStatusChangedEvent（因為狀態未變更）
+     *
+     * @param transferId 轉帳 ID
+     * @throws com.example.demo.exception.TransferNotFoundException 轉帳不存在
+     */
+    void updateTransferTimestamp(Long transferId);
 }

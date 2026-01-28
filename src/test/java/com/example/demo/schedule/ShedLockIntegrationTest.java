@@ -9,6 +9,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -20,19 +26,43 @@ import static org.junit.jupiter.api.Assertions.*;
  * ShedLock Integration Tests
  *
  * Test Strategy:
- * - Start full Spring Context with Redis
+ * - Start full Spring Context with Redis (via Testcontainers)
  * - Verify LockProvider bean exists
  * - Test lock acquisition and release
  * - Verify lock behavior (skip on conflict)
  *
  * Requirements:
- * - Redis must be running on localhost:6379
+ * - Uses Testcontainers for Redis (no need for external Redis)
  * - Tests use 'local' profile configuration
  */
 @SpringBootTest(classes = ConfigureMockConsumerBeanApplication.class)
+@Testcontainers
 @ActiveProfiles("local")
 @DisplayName("ShedLock Integration Tests")
 class ShedLockIntegrationTest {
+
+    @Container
+    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+        .withDatabaseName("testdb")
+        .withUsername("test")
+        .withPassword("test");
+
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
+        .withExposedPorts(6379);
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        // MySQL configuration
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+
+        // Redis configuration
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", redis::getFirstMappedPort);
+    }
 
     @Autowired
     private LockProvider lockProvider;
@@ -135,8 +165,9 @@ class ShedLockIntegrationTest {
         // Wait for lock to expire (do not call unlock)
         Thread.sleep(3000); // Wait 3 seconds for lock to expire
 
-        // When - Try to acquire lock again after expiry
-        Optional<SimpleLock> secondLock = lockProvider.lock(lockConfig);
+        // When - Try to acquire lock again after expiry (create new config with fresh timestamp)
+        LockConfiguration secondLockConfig = new LockConfiguration(Instant.now(), lockName, lockAtMostFor, lockAtLeastFor);
+        Optional<SimpleLock> secondLock = lockProvider.lock(secondLockConfig);
 
         // Then
         assertTrue(secondLock.isPresent(), "Second lock should succeed after first lock expires");

@@ -441,13 +441,6 @@ When adding new tests:
 5. Clean up test data (handled by autouse fixtures)
 6. Update this README if adding new test categories
 
-## Support
-
-For issues or questions:
-- Check the test documentation in `/docs/integration-tests/`
-- Review test case specifications in `/docs/integration-tests/test-cases/`
-- Check Spring Boot application logs
-
 ## Test Summary
 
 Total: 27 integration tests
